@@ -1,228 +1,181 @@
 use bevy::{
     prelude::*,
-    sprite::collide_aabb::{collide, Collision},
-    sprite::MaterialMesh2dBundle,
-    time::FixedTimestep,
+    math::{Vec3Swizzles, f64},
+    sprite::collide_aabb::collide
 };
 
-const TIME_STEP: f32 = 1.0 / 60.0;
-const BACKGROUND_COLOR: Color = Color::rgb(0.0, 0.0, 0.0); // Black
+use components::{
+    Speed,
+    Movable,
+    Bullet,
+    SpriteSize,
+    Player,
+    FromPlayer,
+    Enemy,
+    FromEnemy,
+    BulletToSpawn,
+    BulletToSpawnTimer,
+};
 
-const WALL_THICKNESS: f32 = 10.0;
+use player::PlayerPlugin;
 
-const LEFT_WALL: f32 = -450.;
-const RIGHT_WALL: f32 = 450.;
 
-const BOTTOM_WALL: f32 = -300.;
-const TOP_WALL: f32 = 300.;
-const WALL_COLOR: Color = Color::rgb(0.0, 0.0, 0.0); // Black
+mod components;
+mod player;
 
-const PLAYER_SPEED: f32 = 500.0;
 const PLAYER_BULLET_SPEED: f32 = 500.0;
-const PLAYER_SIZE: Vec3 = Vec3::new(100.0, 100.0, 1.0); // Sqaure for now
-const PLAYER_STARING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 0.0);
+const PLAYER_SIZE: Vec2 = Vec2::new(50.0, 50.0); // Sqaure for now
+// const PLAYER_STARING_POSITION: Vec2 = Vec2::new(0.0, -300.0);
 const PLAYER_COLOR: Color = Color::rgb(0.0, 0.0, 1.0); // Blue
 const PLAYER_BULLET_COLOR: Color = Color::rgb(0.0, 1.0, 0.0); // Green
+const PLAYER_BULLET_SIZE : Vec2 = Vec2::new(5.0, 5.0);
+const PLAYER_RESPAWN_TIME: f64 = 2.0;
 
-const ENEMY_SPEED: f32 = 200.0;
+
 const ENEMY_BULLET_SPEED: f32 = 500.0;
-const ENEMY_SIZE: Vec3 = Vec3::new(100.0, 100.0, 1.0); // Sqaure for now
+const ENEMY_SIZE: Vec2 = Vec2::new(50.0, 50.0); // Sqaure for now
 const ENEMY_COLOR: Color = Color::rgb(1.0, 0.0, 0.0); // Red
 const ENEMY_BULLET_COLOR: Color = Color::rgb(1.0, 1.0, 0.0); // Yellow
+const ENEMY_BULLET_SIZE : Vec2 = Vec2::new(5.0, 5.0);
 
-const SCOREBOARD_FONT_SIZE: f32 = 40.0;
-const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
-const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
-const SCORE_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
+const TIME_STEP: f32 = 1./60.0;
+const BASE_SPEED: f32 = 100.0;
 
-fn main() {
+
+#[derive(Resource)]
+pub struct WinSize {
+    pub w: f32,
+    pub h: f32,
+}
+
+#[derive(Resource)]
+pub struct PlayerState {
+    on: bool,
+    last_shot: f64,
+}
+
+impl Default for PlayerState {
+    fn default() -> Self {
+        Self {
+            on: false,
+            last_shot: -1.0,
+        }
+    }
+}
+
+impl PlayerState {
+    pub fn shot(&mut self, time: f64) {
+        self.last_shot = time;
+        self.on = false;
+    }
+    pub fn spawned(&mut self) {
+        self.on = true;
+        self.last_shot = -1.0;
+    }
+}
+
+// #[derive(Resource)]
+// struct GameTextures{
+//     player: Handle<TextureAtlas>,
+//     enemy: Handle<TextureAtlas>,
+//     player_bullet: Handle<TextureAtlas>,
+//     enemy_bullet: Handle<TextureAtlas>,
+// }
+
+// #[derive(Default)]
+// struct Player{
+//     speed: f32,
+//     size: Vec2,
+//     color: Color,
+//     position: Vec2,
+//     bullet_speed: f32,
+//     bullet_color: Color,
+// }
+
+fn main(){
     App::new()
-        .add_plugins(DefaultPlugins)
-        .insert_resource(Scoreboard { score: 0 })
-        .insert_resource(ClearColor(BACKGROUND_COLOR))
-        .add_startup_system(setup)
-        .add_event::<CollisionEvent>()
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                .with_system(player_movement_system)
-                .with_system(player_bullet_movement_system)
-                .with_system(enemy_spawn)
-                .with_system(enemy_movement_system)
-                .with_system(enemy_bullet_movement_system)
-                .with_system(collision_system)
-                .with_system(scoreboard_system),
-        )
-        .add_system(update_scoreboard)
-        .add_system(bevy::window::close_on_esc)
-        .run();
-}
-
-#[derive(Component)]
-struct Player;
-
-#[derive(Component)]
-struct Enemy;
-
-#[derive(Component)]
-struct PlayerBullet;
-
-#[derive(Component)]
-struct EnemyBullet;
-
-#[derive(Component)]
-struct Collider;
-
-#[derive(Component)]
-struct CollisionEvent;
-
-#[derive(Component)]
-struct Scoreboard {
-    score: usize,
-}
-
-#[derive(Component)]
-struct WallBundle {
-    sprite_bundle: SpriteBundle,
-    collider: Collider,
-}
-
-enum WallLocation {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-impl WallLocation {
-    fn position(&self) -> Vec2 {
-        match self {
-            WallLocation::Left => Vec2::new(LEFT_WALL, 0.0),
-            WallLocation::Right => Vec2::new(RIGHT_WALL, 0.0),
-            WallLocation::Top => Vec2::new(0.0, TOP_WALL),
-            WallLocation::Bottom => Vec2::new(0.0, BOTTOM_WALL),
-        }
-    }
-
-    fn size(&self) -> Vec2 {
-        let arena_height = TOP_WALL - BOTTOM_WALL;
-        let arena_width = RIGHT_WALL - LEFT_WALL;
-
-        assert!(arena_height > 0.0);
-        assert!(arena_width > 0.0);
-
-        match self {
-            WallLocation::Left => Vec2::new(WALL_THICKNESS, arena_height + WALL_THICKNESS),
-            WallLocation::Right => Vec2::new(WALL_THICKNESS, arena_height + WALL_THICKNESS),
-            WallLocation::Top => Vec2::new(arena_width + WALL_THICKNESS, WALL_THICKNESS),
-            WallLocation::Bottom => Vec2::new(arena_width + WALL_THICKNESS, WALL_THICKNESS),
-        }
-    }
-}
-
-impl WallBundle {
-    fn new(location: WallLocation) -> WallBundle {
-        WallBundle {
-            sprite_bundle: SpriteBundle {
-                transform: Transform {
-                    translation: location.position().extend(0.0),
-                    scale: location.size().extend(1.0),
-                    ..default()
-                },
-                sprite: Sprite {
-                    color: WALL_COLOR,
-                    ..default()
-                },
-                ..default()
+        .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+        .add_plugins(DefaultPlugins.set(WindowPlugin{
+            window: WindowDescriptor{
+                title: "Galaga".to_string(),
+                width: 800.0,
+                height: 600.0,
+                ..Default::default()
             },
-            collider: Collider,
-        }
-    }
+            ..Default::default()
+        }))
+        .add_startup_system(setup_system)
+        .add_plugin(PlayerPlugin)
+        .add_system(movement)
+        .run();
+    
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
-) {
+fn setup_system(
+    mut commands:Commands,
+    mut windows: ResMut<Windows>,
+)   {
+    
+    // camera
+
     commands.spawn(Camera2dBundle::default());
 
-    // Player
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform {
-                translation: PLAYER_STARING_POSITION,
-                scale: PLAYER_SIZE,
-                ..default()
-            },
-            sprite: Sprite {
-                color: PLAYER_COLOR,
-                ..default()
-            },
-            ..default()
-        },
-        Player,
-        Collider,
-    ));
+    // capture window size
+    let window = windows.get_primary_mut().unwrap();
+    let window_size = Vec2::new(window.width(), window.height());
 
-    // Player Bullets
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform {
-                translation: Vec3::new(0.0, -1000.0, 0.0),
-                scale: Vec3::new(10.0, 10.0, 1.0),
-                ..default()
-            },
-            sprite: Sprite {
-                color: PLAYER_BULLET_COLOR,
-                ..default()
-            },
-            ..default()
-        },
-        PlayerBullet,
-        Collider,
-    ));
 
-    // Enemy
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform {
-                translation: Vec3::new(0.0, 300.0, 0.0),
-                scale: ENEMY_SIZE,
-                ..default()
-            },
-            sprite: Sprite {
-                color: ENEMY_COLOR,
-                ..default()
-            },
-            ..default()
-        },
-        Enemy,
-        Collider,
-    ));
+    // add WinSize resource
+    let win_size = WinSize {w: window_size.x, h: window_size.y};
+    commands.insert_resource(win_size);
 
-    // Enemy Bullets
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform {
-                translation: Vec3::new(0.0, -1000.0, 0.0),
-                scale: Vec3::new(10.0, 10.0, 1.0),
-                ..default()
-            },
-            sprite: Sprite {
-                color: ENEMY_BULLET_COLOR,
-                ..default()
-            },
-            ..default()
-        },
-        EnemyBullet,
-        Collider,
-    ));
+    // add Player
+    // let bottom = -window_size.y / 2.0;
+    //     commands
+    //         .spawn(SpriteBundle{
+    //             sprite: Sprite{
+    //                 custom_size: Some(PLAYER_SIZE),
+    //                 color: PLAYER_COLOR,
+    //                 ..Default::default()
+    //             },
+    //             transform: Transform{
+    //                 translation: Vec3::new(
+    //                     0.,
+    //                     bottom + PLAYER_SIZE.y / 2. +5.,
+    //                     10.,
 
-    // Walls
-    commands.spawn(WallBundle::new(WallLocation::Left));
-    commands.spawn(WallBundle::new(WallLocation::Right));
-    commands.spawn(WallBundle::new(WallLocation::Top));
-    commands.spawn(WallBundle::new(WallLocation::Bottom));
+    //                 ),
+    //                 scale: Vec3::new(1., 1., 1.),
+    //                 ..Default::default()
+    //             },
+    //             ..Default::default()
+    //         })
+    //         .insert(Player)
+    //         .insert(Speed{x: 0.0, y: 0.0})
+    //         .insert(SpriteSize(PLAYER_SIZE))
+    //         .insert(Movable {despawn: false});
+    
+}
+
+fn movement(
+    mut commands: Commands,
+    win_size: Res<WinSize>,
+    mut query: Query<(Entity, &Speed, &mut Transform, &Movable)>,
+) {
+    for (entity, speed, mut transform, movable) in query.iter_mut() {
+        let translation = &mut transform.translation;
+        translation.x = speed.x * TIME_STEP * BASE_SPEED;
+        translation.y = speed.y * TIME_STEP * BASE_SPEED;
+
+        if movable.despawn {
+            const MARGIN: f32 = 200.0;
+            if translation.y > win_size.h / 2. + MARGIN
+                || translation.y < -win_size.h / 2. - MARGIN
+                || translation.x > win_size.w / 2. + MARGIN
+                || translation.x < -win_size.w / 2. - MARGIN
+            {
+                commands.entity(entity).despawn();
+            }
+        }
+    }
 }
