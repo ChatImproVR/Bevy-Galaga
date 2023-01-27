@@ -24,19 +24,19 @@ mod components;
 mod player;
 
 const PLAYER_BULLET_SPEED: f32 = 500.0;
-const PLAYER_SIZE: Vec2 = Vec2::new(50.0, 50.0); // Sqaure for now
+const PLAYER_SIZE: Vec2 = Vec2::new(30.0, 30.0); // Sqaure for now
 // const PLAYER_STARING_POSITION: Vec2 = Vec2::new(0.0, -300.0);
 const PLAYER_COLOR: Color = Color::rgb(0.0, 0.0, 1.0); // Blue
 const PLAYER_BULLET_COLOR: Color = Color::rgb(0.0, 1.0, 0.0); // Green
-const PLAYER_BULLET_SIZE : Vec2 = Vec2::new(5.0, 5.0);
+const PLAYER_BULLET_SIZE : Vec2 = Vec2::new(3.0, 3.0);
 const PLAYER_RESPAWN_TIME: f64 = 2.0;
 
 
 const ENEMY_BULLET_SPEED: f32 = 500.0;
-const ENEMY_SIZE: Vec2 = Vec2::new(50.0, 50.0); // Sqaure for now
+const ENEMY_SIZE: Vec2 = Vec2::new(30.0, 30.0); // Sqaure for now
 const ENEMY_COLOR: Color = Color::rgb(1.0, 0.0, 0.0); // Red
 const ENEMY_BULLET_COLOR: Color = Color::rgb(1.0, 1.0, 0.0); // Yellow
-const ENEMY_BULLET_SIZE : Vec2 = Vec2::new(5.0, 5.0);
+const ENEMY_BULLET_SIZE : Vec2 = Vec2::new(3.0, 3.0);
 
 const TIME_STEP: f32 = 1./60.0;
 const BASE_SPEED: f32 = 100.0;
@@ -164,8 +164,8 @@ fn movement(
 ) {
     for (entity, speed, mut transform, movable) in query.iter_mut() {
         let translation = &mut transform.translation;
-        translation.x = speed.x * TIME_STEP * BASE_SPEED;
-        translation.y = speed.y * TIME_STEP * BASE_SPEED;
+        translation.x += speed.x * TIME_STEP * BASE_SPEED;
+        translation.y += speed.y * TIME_STEP * BASE_SPEED;
 
         if movable.despawn {
             const MARGIN: f32 = 200.0;
