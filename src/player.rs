@@ -57,7 +57,7 @@ fn player_spawn(
             .insert(Player)
             .insert(Speed{x: 0.0, y: 0.0})
             .insert(SpriteSize(PLAYER_SIZE))
-            .insert(Movable {despawn: false});
+            .insert(Movable {despawn: false, player: true, enemy: false});
         
             player_status.spawned();
     }
@@ -69,9 +69,16 @@ fn player_movement_input(
 ){
     if let Ok(mut speed) = query.get_single_mut() {
         speed.x = if keyboard_input.pressed(KeyCode::Left){
-            -1.
+            -5.
         } else if keyboard_input.pressed(KeyCode::Right){
-            1.
+            5.
+        } else {
+            0.
+        };
+        speed.y = if keyboard_input.pressed(KeyCode::Up){
+            5.
+        } else if keyboard_input.pressed(KeyCode::Down){
+            -5.
         } else {
             0.
         };
@@ -105,8 +112,8 @@ fn player_fire_input(
                 .insert(Bullet)
                 .insert(FromPlayer)
                 .insert(SpriteSize(PLAYER_BULLET_SIZE))
-                .insert(Speed{x: 0.0, y: 1.0})
-                .insert(Movable{despawn: true});
+                .insert(Speed{x: 0.0, y: 10.0})
+                .insert(Movable{despawn: true, player: false, enemy: false});
             };
             
             spawn_bullet(x_offset);

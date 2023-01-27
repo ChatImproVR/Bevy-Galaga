@@ -23,16 +23,13 @@ use player::PlayerPlugin;
 mod components;
 mod player;
 
-const PLAYER_BULLET_SPEED: f32 = 500.0;
 const PLAYER_SIZE: Vec2 = Vec2::new(30.0, 30.0); // Sqaure for now
-// const PLAYER_STARING_POSITION: Vec2 = Vec2::new(0.0, -300.0);
 const PLAYER_COLOR: Color = Color::rgb(0.0, 0.0, 1.0); // Blue
 const PLAYER_BULLET_COLOR: Color = Color::rgb(0.0, 1.0, 0.0); // Green
 const PLAYER_BULLET_SIZE : Vec2 = Vec2::new(3.0, 3.0);
 const PLAYER_RESPAWN_TIME: f64 = 2.0;
 
 
-const ENEMY_BULLET_SPEED: f32 = 500.0;
 const ENEMY_SIZE: Vec2 = Vec2::new(30.0, 30.0); // Sqaure for now
 const ENEMY_COLOR: Color = Color::rgb(1.0, 0.0, 0.0); // Red
 const ENEMY_BULLET_COLOR: Color = Color::rgb(1.0, 1.0, 0.0); // Yellow
@@ -74,23 +71,6 @@ impl PlayerState {
     }
 }
 
-// #[derive(Resource)]
-// struct GameTextures{
-//     player: Handle<TextureAtlas>,
-//     enemy: Handle<TextureAtlas>,
-//     player_bullet: Handle<TextureAtlas>,
-//     enemy_bullet: Handle<TextureAtlas>,
-// }
-
-// #[derive(Default)]
-// struct Player{
-//     speed: f32,
-//     size: Vec2,
-//     color: Color,
-//     position: Vec2,
-//     bullet_speed: f32,
-//     bullet_color: Color,
-// }
 
 fn main(){
     App::new()
@@ -98,8 +78,8 @@ fn main(){
         .add_plugins(DefaultPlugins.set(WindowPlugin{
             window: WindowDescriptor{
                 title: "Galaga".to_string(),
-                width: 800.0,
-                height: 600.0,
+                width: 400.0,
+                height: 1000.0,
                 ..Default::default()
             },
             ..Default::default()
@@ -128,32 +108,6 @@ fn setup_system(
     // add WinSize resource
     let win_size = WinSize {w: window_size.x, h: window_size.y};
     commands.insert_resource(win_size);
-
-    // add Player
-    // let bottom = -window_size.y / 2.0;
-    //     commands
-    //         .spawn(SpriteBundle{
-    //             sprite: Sprite{
-    //                 custom_size: Some(PLAYER_SIZE),
-    //                 color: PLAYER_COLOR,
-    //                 ..Default::default()
-    //             },
-    //             transform: Transform{
-    //                 translation: Vec3::new(
-    //                     0.,
-    //                     bottom + PLAYER_SIZE.y / 2. +5.,
-    //                     10.,
-
-    //                 ),
-    //                 scale: Vec3::new(1., 1., 1.),
-    //                 ..Default::default()
-    //             },
-    //             ..Default::default()
-    //         })
-    //         .insert(Player)
-    //         .insert(Speed{x: 0.0, y: 0.0})
-    //         .insert(SpriteSize(PLAYER_SIZE))
-    //         .insert(Movable {despawn: false});
     
 }
 
@@ -168,13 +122,29 @@ fn movement(
         translation.y += speed.y * TIME_STEP * BASE_SPEED;
 
         if movable.despawn {
-            const MARGIN: f32 = 200.0;
+            const MARGIN: f32 = 10.0;
             if translation.y > win_size.h / 2. + MARGIN
                 || translation.y < -win_size.h / 2. - MARGIN
                 || translation.x > win_size.w / 2. + MARGIN
                 || translation.x < -win_size.w / 2. - MARGIN
             {
                 commands.entity(entity).despawn();
+            }
+        }
+        else if movable.player{
+            if translation.x < -win_size.w / 2. + PLAYER_SIZE.y / 2. + 5.0
+            {
+                translation.x = -win_size.w / 2. + PLAYER_SIZE.y / 2. + 5.0;
+            } else if translation.x > win_size.w / 2. - PLAYER_SIZE.y / 2. - 5.0
+            {
+                translation.x = win_size.w / 2. - PLAYER_SIZE.y / 2. - 5.0;
+            }
+            if translation.y < -win_size.h / 2. + PLAYER_SIZE.y / 2. + 5.
+            {
+                translation.y = -win_size.h / 2. + PLAYER_SIZE.y / 2. + 5.;
+            } else if translation.y > -win_size.h / 4. 
+            {
+                translation.y = -win_size.h / 4.;
             }
         }
     }

@@ -15,6 +15,8 @@ pub struct Speed{
 #[derive(Component)]
 pub struct Movable{
     pub despawn: bool,
+    pub player: bool,
+    pub enemy: bool,
 }
 
 #[derive(Component)]
