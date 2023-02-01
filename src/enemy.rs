@@ -76,7 +76,7 @@ fn enemy_spawn(
 
 fn enemy_movement(mut query: Query<&mut Speed, With<Enemy>>) {
     let mut rng = thread_rng();
-    if let Ok(mut speed) = query.get_single_mut() {
+    for mut speed in query.iter_mut() {
         speed.x = rng.gen_range(-5.0..5.0);
         speed.y = rng.gen_range(-5.0..5.0);
     }
