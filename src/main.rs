@@ -1,43 +1,37 @@
 use bevy::{
+    math::{f64, Vec3Swizzles},
     prelude::*,
-    math::{Vec3Swizzles, f64},
-    sprite::collide_aabb::collide
+    sprite::collide_aabb::collide,
 };
 
 use components::{
-    Speed,
-    Movable,
-    Bullet,
-    SpriteSize,
-    Player,
-    FromPlayer,
-    Enemy,
-    FromEnemy,
-    BulletToSpawn,
-    BulletToSpawnTimer,
+    Bullet, BulletToSpawn, BulletToSpawnTimer, Enemy, FromEnemy, FromPlayer, Movable, Player,
+    Speed, SpriteSize,
 };
 
+use enemy::EnemyPlugin;
 use player::PlayerPlugin;
 
-
 mod components;
+mod enemy;
 mod player;
 
 const PLAYER_SIZE: Vec2 = Vec2::new(30.0, 30.0); // Sqaure for now
 const PLAYER_COLOR: Color = Color::rgb(0.0, 0.0, 1.0); // Blue
 const PLAYER_BULLET_COLOR: Color = Color::rgb(0.0, 1.0, 0.0); // Green
-const PLAYER_BULLET_SIZE : Vec2 = Vec2::new(3.0, 3.0);
+const PLAYER_BULLET_SIZE: Vec2 = Vec2::new(3.0, 3.0);
 const PLAYER_RESPAWN_TIME: f64 = 2.0;
-
 
 const ENEMY_SIZE: Vec2 = Vec2::new(30.0, 30.0); // Sqaure for now
 const ENEMY_COLOR: Color = Color::rgb(1.0, 0.0, 0.0); // Red
 const ENEMY_BULLET_COLOR: Color = Color::rgb(1.0, 1.0, 0.0); // Yellow
-const ENEMY_BULLET_SIZE : Vec2 = Vec2::new(3.0, 3.0);
+const ENEMY_BULLET_SIZE: Vec2 = Vec2::new(3.0, 3.0);
+const ENEMY_MAX: u32 = 3;
+// const ENEMY_RESPAWN_TIME: f64 = 2.0;
+// const FORMATION_MEMBERS_MAX: u32 = 15;
 
-const TIME_STEP: f32 = 1./60.0;
+const TIME_STEP: f32 = 1. / 60.0;
 const BASE_SPEED: f32 = 100.0;
-
 
 #[derive(Resource)]
 pub struct WinSize {
@@ -71,12 +65,40 @@ impl PlayerState {
     }
 }
 
+#[derive(Resource)]
+pub struct EnemyState {
+    on: bool,
+    last_shot: f64,
+}
 
-fn main(){
+impl Default for EnemyState {
+    fn default() -> Self {
+        Self {
+            on: false,
+            last_shot: -1.0,
+        }
+    }
+}
+
+impl EnemyState {
+    pub fn shot(&mut self, time: f64) {
+        self.last_shot = time;
+        self.on = false;
+    }
+    pub fn spawned(&mut self) {
+        self.on = true;
+        self.last_shot = -1.0;
+    }
+}
+
+#[derive(Resource)]
+struct EnemyCount(u32);
+
+fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
-        .add_plugins(DefaultPlugins.set(WindowPlugin{
-            window: WindowDescriptor{
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
                 title: "Galaga".to_string(),
                 width: 400.0,
                 height: 1000.0,
@@ -86,16 +108,12 @@ fn main(){
         }))
         .add_startup_system(setup_system)
         .add_plugin(PlayerPlugin)
+        .add_plugin(EnemyPlugin)
         .add_system(movement)
         .run();
-    
 }
 
-fn setup_system(
-    mut commands:Commands,
-    mut windows: ResMut<Windows>,
-)   {
-    
+fn setup_system(mut commands: Commands, mut windows: ResMut<Windows>) {
     // camera
 
     commands.spawn(Camera2dBundle::default());
@@ -104,11 +122,13 @@ fn setup_system(
     let window = windows.get_primary_mut().unwrap();
     let window_size = Vec2::new(window.width(), window.height());
 
-
     // add WinSize resource
-    let win_size = WinSize {w: window_size.x, h: window_size.y};
+    let win_size = WinSize {
+        w: window_size.x,
+        h: window_size.y,
+    };
     commands.insert_resource(win_size);
-    
+    commands.insert_resource(EnemyCount(0));
 }
 
 fn movement(
@@ -130,22 +150,33 @@ fn movement(
             {
                 commands.entity(entity).despawn();
             }
-        }
-        else if movable.player{
-            if translation.x < -win_size.w / 2. + PLAYER_SIZE.y / 2. + 5.0
-            {
+        } else if movable.player {
+            if translation.x < -win_size.w / 2. + PLAYER_SIZE.y / 2. + 5.0 {
                 translation.x = -win_size.w / 2. + PLAYER_SIZE.y / 2. + 5.0;
-            } else if translation.x > win_size.w / 2. - PLAYER_SIZE.y / 2. - 5.0
-            {
+            } else if translation.x > win_size.w / 2. - PLAYER_SIZE.y / 2. - 5.0 {
                 translation.x = win_size.w / 2. - PLAYER_SIZE.y / 2. - 5.0;
             }
-            if translation.y < -win_size.h / 2. + PLAYER_SIZE.y / 2. + 5.
-            {
+            if translation.y < -win_size.h / 2. + PLAYER_SIZE.y / 2. + 5. {
                 translation.y = -win_size.h / 2. + PLAYER_SIZE.y / 2. + 5.;
-            } else if translation.y > -win_size.h / 4. 
-            {
+            } else if translation.y > -win_size.h / 4. {
                 translation.y = -win_size.h / 4.;
+            }
+        } else if movable.enemy {
+            if translation.x < -win_size.w / 2. + ENEMY_SIZE.y / 2. + 5.0 {
+                translation.x = -win_size.w / 2. + ENEMY_SIZE.y / 2. + 5.0;
+            } else if translation.x > win_size.w / 2. - ENEMY_SIZE.y / 2. - 5.0 {
+                translation.x = win_size.w / 2. - ENEMY_SIZE.y / 2. - 5.0;
+            }
+            if translation.y < -win_size.h / 2. + ENEMY_SIZE.y / 2. + 5. {
+                translation.y = -win_size.h / 2. + ENEMY_SIZE.y / 2. + 5.;
+            } else if translation.y > win_size.h / 2. - ENEMY_SIZE.y / 2. - 5. {
+                translation.y = win_size.h / 2. - ENEMY_SIZE.y / 2. - 5.;
             }
         }
     }
 }
+
+// fn player_hit_enemy(
+//     mut commands: Commands,
+//     mut
+// )
