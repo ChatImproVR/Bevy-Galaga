@@ -93,10 +93,15 @@ fn main() {
         .add_system(movement)
         .add_system(enemy_hit_player)
         .add_system(player_hit_enemy)
+        .add_system(update_score)
         .run();
 }
 
-fn setup_system(mut commands: Commands, mut windows: ResMut<Windows>) {
+fn setup_system(
+    mut commands: Commands,
+    mut windows: ResMut<Windows>,
+    asset_server: Res<AssetServer>,
+) {
     // camera
 
     commands.spawn(Camera2dBundle::default());
@@ -113,41 +118,29 @@ fn setup_system(mut commands: Commands, mut windows: ResMut<Windows>) {
 
     // score board
 
-    // commands
-    //     .spawn(TextBundle {
-    //         text: Text {
-    //             sections: vec![
-    //                 TextSection {
-    //                     value: "Score: ".to_string(),
-    //                     style: TextStyle {
-    //                         font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-    //                         font_size: 40.0,
-    //                         color: SCORE_COLOR,
-    //                     },
-    //                 },
-    //                 TextSection {
-    //                     value: "0".to_string(),
-    //                     style: TextStyle {
-    //                         font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-    //                         font_size: 40.0,
-    //                         color: SCORE_COLOR,
-    //                     },
-    //                 },
-    //             ],
-    //             alignment: Default::default(),
-    //         },
-    //         style: Style {
-    //             position_type: PositionType::Absolute,
-    //             position: Rect {
-    //                 left: Val::Px(5.0),
-    //                 top: Val::Px(5.0),
-    //                 ..Default::default()
-    //             },
-    //             ..Default::default()
-    //         },
-    //         ..Default::default()
-    //     });
-
+    commands.spawn(TextBundle {
+        text: Text {
+            sections: vec![TextSection {
+                value: "0".to_string(),
+                style: TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 150.0,
+                    color: SCORE_COLOR,
+                },
+            }],
+            alignment: Default::default(),
+        },
+        style: Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                left: Val::Px(win_size.w / 2. - 50.),
+                top: Val::Px(win_size.h / 2. - 50.),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     commands.insert_resource(win_size);
     commands.insert_resource(EnemyCount(0));
@@ -249,18 +242,21 @@ fn enemy_hit_player(
     mut player_state: ResMut<PlayerState>,
     mut score: ResMut<Score>,
     time: Res<Time>,
-    bullet_query: Query<(Entity, &Transform, &SpriteSize), (With<Bullet>, With<FromEnemy>)>,
+    enemy_bullet_query: Query<(Entity, &Transform, &SpriteSize), (With<Bullet>, With<FromEnemy>)>,
     player_query: Query<(Entity, &Transform, &SpriteSize), With<Player>>,
+    player_bullet_query: Query<(Entity, &Transform, &SpriteSize), (With<Bullet>, With<FromPlayer>)>,
 ) {
     if let Ok((player_entity, player_transform, player_size)) = player_query.get_single() {
         let player_scale = Vec2::from(player_transform.scale.xy());
 
-        for (bullet_entity, bullet_transform, bullet_size) in bullet_query.iter() {
-            let bullet_scale = Vec2::from(bullet_transform.scale.xy());
+        for (enemy_bullet_entity, enemy_bullet_transform, enemy_bullet_size) in
+            enemy_bullet_query.iter()
+        {
+            let bullet_scale = Vec2::from(enemy_bullet_transform.scale.xy());
 
             let collision = collide(
-                bullet_transform.translation,
-                bullet_size.0 * bullet_scale,
+                enemy_bullet_transform.translation,
+                enemy_bullet_size.0 * bullet_scale,
                 player_transform.translation,
                 player_size.0 * player_scale,
             );
@@ -270,10 +266,19 @@ fn enemy_hit_player(
                 player_state.shot(time.elapsed_seconds_f64());
                 score.0 = 0;
 
-                commands.entity(bullet_entity).despawn();
+                commands.entity(enemy_bullet_entity).despawn();
+
+                for (player_bullet_entity, _, _) in player_bullet_query.iter() {
+                    commands.entity(player_bullet_entity).despawn();
+                }
 
                 break;
             }
         }
     }
+}
+
+fn update_score(score_value: Res<Score>, mut query: Query<&mut Text>) {
+    let mut text = query.single_mut();
+    text.sections[0].value = score_value.0.to_string();
 }
